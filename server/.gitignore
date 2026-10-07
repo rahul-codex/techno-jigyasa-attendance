@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Production Builds
+dist/
+build/
+
+# Uploads & Temp Files
+uploads/*
+!uploads/.gitkeep
+!uploads/profiles/
+uploads/profiles/*
+!uploads/profiles/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Database & Cache
+prisma/*.db
+prisma/*.db-journal
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

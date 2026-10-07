@@ -1,0 +1,179 @@
+// Prisma Schema for Techno Jigyasa Club - Smart Attendance Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Department {
+  BCA
+  B_TECH_AIML
+  B_TECH_CSE
+  B_TECH_EN
+  MCA
+}
+
+enum Section {
+  A
+  B
+  C
+  D
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum AdminStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SessionType {
+  SESSION_1 // Morning Session
+  SESSION_2 // Afternoon Session
+}
+
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  CLOSED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Admin {
+  id           String      @id @default(uuid())
+  adminId      String      @unique // Unique admin username/identifier (e.g. admin_jigyasa)
+  name         String
+  passwordHash String
+  role         AdminRole   @default(ADMIN)
+  status       AdminStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relationships
+  sessionsCreated AttendanceSession[] @relation("AdminCreatedSessions")
+  recordsMarked   AttendanceRecord[]  @relation("AdminMarkedRecords")
+  activityLogs    ActivityLog[]       @relation("AdminLogs")
+
+  @@index([adminId])
+  @@index([role])
+  @@index([status])
+  @@map("admins")
+}
+
+model Student {
+  id             String        @id @default(uuid())
+  erpId          String        @unique // Unique College ERP ID (e.g. 2024BCA001)
+  name           String? // Completed during student profile setup
+  passwordHash   String
+  profileImage   String? // Optional file path or URL to uploaded profile photo
+  department     Department? // Completed during student profile setup
+  section        Section? // Completed during student profile setup
+  qrTokenVersion Int           @default(1) // Incremented to invalidate previous QR codes
+  status         StudentStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relationships
+  attendanceRecords AttendanceRecord[]
+  activityLogs      ActivityLog[]
+
+  @@index([erpId])
+  @@index([department])
+  @@index([section])
+  @@index([status])
+  @@index([qrTokenVersion])
+  @@map("students")
+}
+
+model AttendanceSession {
+  id               String        @id @default(uuid())
+  date             DateTime      @db.Date // Specific calendar date
+  sessionType      SessionType // SESSION_1 (Morning) or SESSION_2 (Afternoon)
+  startTime        DateTime
+  endTime          DateTime
+  status           SessionStatus @default(SCHEDULED)
+  createdByAdminId String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relationships
+  createdByAdmin Admin?             @relation("AdminCreatedSessions", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  records        AttendanceRecord[]
+
+  // Constraints: Exactly two attendance sessions per day (SESSION_1 and SESSION_2)
+  @@unique([date, sessionType], name: "unique_date_session_type")
+  @@index([date])
+  @@index([sessionType])
+  @@index([status])
+  @@index([createdByAdminId])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id              String           @id @default(uuid())
+  studentId       String
+  sessionId       String
+  attendanceDate  DateTime         @db.Date
+  status          AttendanceStatus @default(PRESENT)
+  markedAt        DateTime         @default(now())
+  markedByAdminId String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relationships
+  student       Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session       AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  markedByAdmin Admin             @relation("AdminMarkedRecords", fields: [markedByAdminId], references: [id])
+
+  // Database-level constraint: Prevents duplicate attendance for the same student in the same session
+  @@unique([studentId, sessionId], name: "unique_student_session")
+  @@index([studentId])
+  @@index([sessionId])
+  @@index([attendanceDate])
+  @@index([status])
+  @@index([markedByAdminId])
+  @@map("attendance_records")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  adminId   String?
+  action    String // e.g. "STUDENT_REGISTER", "STUDENT_LOGIN", "ATTENDANCE_MARKED"
+  studentId String?
+  metadata  Json? // Context details (e.g. ERP ID, session type, IP address)
+  createdAt DateTime @default(now())
+
+  // Relationships
+  admin   Admin?   @relation("AdminLogs", fields: [adminId], references: [id], onDelete: SetNull)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([adminId])
+  @@index([studentId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
